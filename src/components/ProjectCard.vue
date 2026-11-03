@@ -145,7 +145,6 @@ const highlightsId = `${props.project.slug}-highlights`;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: auto;
   padding: 13px 0 11px;
   border: none;
   border-top: 1px solid var(--rule);

@@ -8,10 +8,10 @@ import ProjectCard from "./ProjectCard.vue";
     <div class="container">
       <div class="work-head" v-reveal>
         <p class="eyebrow">02 — Featured work</p>
-        <h2>Four systems, four kinds of complexity</h2>
+        <h2>Two systems, two kinds of complexity</h2>
         <p class="work-sub">
-          Selected for range: financial-domain depth, mobile &amp; native skill, systems
-          architecture, and public-facing polish.
+          Selected for range: real-time systems architecture and public-facing
+          transactional polish.
         </p>
       </div>
 

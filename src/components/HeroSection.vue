@@ -13,8 +13,8 @@ import { profile } from "../data/content";
         </h1>
         <p class="hero-lede">{{ profile.positioning }}</p>
         <p class="hero-sub">
-          Multi-tenant Laravel &amp; Vue.js systems for B2B SaaS — invoicing engines,
-          payroll, national e-invoicing compliance, and the mobile apps that connect to them.
+          Multi-tenant Laravel &amp; Vue.js systems for B2B SaaS — from backend
+          architecture and APIs to the interfaces and mobile apps that bring them together.
         </p>
         <div class="hero-actions">
           <a href="#work" class="btn btn-primary">View featured work</a>
@@ -25,26 +25,23 @@ import { profile } from "../data/content";
       <div class="hero-visual" aria-hidden="true">
         <div class="doc-card">
           <div class="doc-head">
-            <span>INV-2026-0417</span>
-            <span class="doc-status">Compliant</span>
+            <span>DOC · 2026-0417</span>
+            <span class="doc-status">Verified</span>
           </div>
           <div class="doc-row doc-row-label">
-            <span>Tenant</span><span>Line item</span><span>Amount</span>
+            <span>Client</span><span>Line item</span><span>Amount</span>
           </div>
           <div class="doc-row">
-            <span>Client SARL</span><span>Accounting · Monthly</span><span>1 240,000 TND</span>
+            <span>Client A</span><span>Platform · Monthly</span><span>1 240,000</span>
           </div>
           <div class="doc-row">
-            <span>Client SARL</span><span>VAT (19%)</span><span>235,600 TND</span>
-          </div>
-          <div class="doc-row">
-            <span>Client SARL</span><span>Timbre fiscal</span><span>1,000 TND</span>
+            <span>Client A</span><span>Tax (19%)</span><span>235,600</span>
           </div>
           <div class="doc-divider"></div>
           <div class="doc-row doc-total">
-            <span></span><span>Total</span><span>1 476,600 TND</span>
+            <span></span><span>Total</span><span>1 475,600</span>
           </div>
-          <div class="doc-seal">TTN · El Fatoora ✓</div>
+          <div class="doc-seal">Balanced to the cent ✓</div>
         </div>
         <div class="doc-card doc-card-back" aria-hidden="true"></div>
       </div>

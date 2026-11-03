@@ -10,12 +10,12 @@ export const profile = {
 
 export const bio = {
   quote:
-    "I build the financial backbone of B2B SaaS products — multi-tenant Laravel and Vue.js systems that turn regulatory complexity into software you can trust. Over the past three years I've shipped invoicing and accounting engines, HR & payroll platforms, and geofenced mobile apps now running in production across Tunisia. I'm most useful on the problems other developers avoid: exact calculation logic, tenant isolation, and the edge cases where a rounding error becomes a compliance incident.",
+    "I build the backbone of B2B SaaS products — multi-tenant Laravel and Vue.js systems that turn regulatory and operational complexity into software you can trust. Over the past three years I've shipped production systems across social commerce, public transit ticketing, and financial compliance in Tunisia. I'm most useful on the problems other developers avoid: exact calculation logic, tenant isolation, and the edge cases where a small mistake becomes an incident.",
   strengths: [
     {
       title: "Regulatory-grade engineering",
       detail:
-        "Built Tunisia's TTN / El Fatoora e-invoicing integration and encoded national tax and labor law directly into core calculation logic, where correctness isn't optional.",
+        "Comfortable owning the parts of a system where correctness isn't optional — exact calculation logic, tax and compliance rules, and the edge cases that turn a rounding error into an incident.",
     },
     {
       title: "Full-stack, full lifecycle",
@@ -41,42 +41,6 @@ export const bio = {
 };
 
 export const projects = [
-  {
-    slug: "iberis-finances",
-    name: "Iberis Finances",
-    tagline: "Multi-tenant financial SaaS that speaks fluent Tunisian tax law.",
-    role: "Iberis",
-    dates: "Dec 2025 – Present",
-    problem:
-      "Tunisian businesses need to issue legally compliant invoices, quotations, and ledger entries while meeting a new national e-invoicing mandate — across many isolated client organizations sharing one platform.",
-    stack: ["Laravel", "Vue.js", "MySQL", "Redis", "Swagger"],
-    highlights: [
-      "Owns calculation logic guaranteeing exact amount consistency across invoicing, quotations, payments, inventory, and ledger entries",
-      "Built the integration to Tunisia's national e-invoicing system (TTN / El Fatoora) plus multiple local payment gateways",
-      "Encoded Tunisian accounting and tax-compliance rules directly into document and payment workflows",
-      "Designed a modular Laravel architecture documented end-to-end with Swagger",
-    ],
-    visual: "ledger",
-    links: [{ label: "Live platform", url: "https://finances.iberis.io/" }],
-  },
-  {
-    slug: "iberis-rh",
-    name: "Iberis RH & Geo-Attendance",
-    tagline: "Payroll, permissions, and a phone that knows when you've actually walked into the office.",
-    role: "Iberis",
-    dates: "Dec 2025 – Present",
-    problem:
-      "Clients needed an HR platform — leave, org hierarchy, roles — plus Tunisian-compliant payroll, and a mobile app that verifies attendance by location without being easily spoofed or draining battery.",
-    stack: ["Laravel", "Vue.js", "Ionic", "Capacitor", "Android", "PHPUnit"],
-    highlights: [
-      "Built the HR module: leave management, organizational hierarchy, granular roles and permissions",
-      "Implemented payroll processing compliant with Tunisian labor legislation",
-      "Shipped a geofenced time-and-attendance app; personally debugged native Android location services, permissions, and background sync",
-      "Hardened multi-tenant isolation and added automated PHPUnit coverage",
-    ],
-    visual: "geofence",
-    links: [{ label: "Live platform", url: "https://hr.iberis.io/" }],
-  },
   {
     slug: "netadvisor",
     name: "NetAdvisor",
@@ -123,9 +87,8 @@ export const skills = [
     note: "The scarce skill most candidates don't have.",
     items: [
       "Financial & accounting workflows",
-      "Tunisian tax compliance",
+      "Tax & regulatory compliance",
       "Payroll & labor law",
-      "E-invoicing (TTN / El Fatoora)",
       "Multi-tenant security",
     ],
   },
@@ -162,10 +125,10 @@ export const skills = [
 export const experience = [
   {
     company: "Iberis",
-    role: "Full-Stack Developer (Vue.js | Laravel)",
+    role: "Full-Stack Developer",
     dates: "Dec 2025 – Present",
-    summary: "Financial SaaS + HR/payroll + geo-attendance mobile app.",
-    projectSlug: "iberis-finances",
+    summary: "Details withheld at the employer's request.",
+    projectSlug: null,
   },
   {
     company: "NetAdvisor",
