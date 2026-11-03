@@ -42,6 +42,42 @@ export const bio = {
 
 export const projects = [
   {
+    slug: "iberis-finances",
+    name: "Iberis Finances",
+    tagline: "Multi-tenant financial SaaS that speaks fluent Tunisian tax law.",
+    role: "Iberis",
+    dates: "Dec 2025 – Present",
+    problem:
+      "Tunisian businesses need to issue legally compliant invoices, quotations, and ledger entries while meeting a new national e-invoicing mandate — across many isolated client organizations sharing one platform.",
+    stack: [],
+    highlights: [
+      "Owns calculation logic guaranteeing exact amount consistency across invoicing, quotations, payments, inventory, and ledger entries",
+      "Built the integration to Tunisia's national e-invoicing system (TTN / El Fatoora) plus multiple local payment gateways",
+      "Encoded Tunisian accounting and tax-compliance rules directly into document and payment workflows",
+      "Designed a modular Laravel architecture documented end-to-end with Swagger",
+    ],
+    visual: "ledger",
+    links: [{ label: "Live platform", url: "https://finances.iberis.io/" }],
+  },
+  {
+    slug: "iberis-rh",
+    name: "Iberis RH & Geo-Attendance",
+    tagline: "Payroll, permissions, and a phone that knows when you've actually walked into the office.",
+    role: "Iberis",
+    dates: "Dec 2025 – Present",
+    problem:
+      "Clients needed an HR platform — leave, org hierarchy, roles — plus Tunisian-compliant payroll, and a mobile app that verifies attendance by location without being easily spoofed or draining battery.",
+    stack: [],
+    highlights: [
+      "Built the HR module: leave management, organizational hierarchy, granular roles and permissions",
+      "Implemented payroll processing compliant with Tunisian labor legislation",
+      "Shipped a geofenced time-and-attendance app; personally debugged native Android location services, permissions, and background sync",
+      "Hardened multi-tenant isolation and added automated PHPUnit coverage",
+    ],
+    visual: "geofence",
+    links: [{ label: "Live platform", url: "https://hr.iberis.io/" }],
+  },
+  {
     slug: "netadvisor",
     name: "NetAdvisor",
     tagline: "A microservices backend connecting personal shoppers and clients, live.",
@@ -127,8 +163,8 @@ export const experience = [
     company: "Iberis",
     role: "Full-Stack Developer",
     dates: "Dec 2025 – Present",
-    summary: "Details withheld at the employer's request.",
-    projectSlug: null,
+    summary: "Financial SaaS + HR/payroll + geo-attendance mobile app.",
+    projectSlug: "iberis-finances",
   },
   {
     company: "NetAdvisor",

@@ -25,7 +25,7 @@ const highlightsId = `${props.project.slug}-highlights`;
 
       <p class="card-problem">{{ project.problem }}</p>
 
-      <div class="card-stack">
+      <div v-if="project.stack?.length" class="card-stack">
         <span v-for="t in project.stack" :key="t" class="tag">{{ t }}</span>
       </div>
 
