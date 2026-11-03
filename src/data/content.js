@@ -57,7 +57,7 @@ export const projects = [
       "Designed a modular Laravel architecture documented end-to-end with Swagger",
     ],
     visual: "ledger",
-    links: [{ label: "Live platform", url: "https://finances.iberis.io/" }],
+    links: [{ label: "finances.iberis.io", url: "https://finances.iberis.io/" }],
   },
   {
     slug: "iberis-rh",
@@ -75,7 +75,7 @@ export const projects = [
       "Hardened multi-tenant isolation and added automated PHPUnit coverage",
     ],
     visual: "geofence",
-    links: [{ label: "Live platform", url: "https://hr.iberis.io/" }],
+    links: [{ label: "hr.iberis.io", url: "https://hr.iberis.io/" }],
   },
   {
     slug: "netadvisor",
