@@ -24,17 +24,24 @@ defineProps({
       <span class="pv-badge pv-badge-bottom">Geo-fenced zone</span>
     </div>
 
-    <!-- network: gateway + service nodes -->
+    <!-- network: gateway + service nodes, live pulse on the chat socket -->
     <div v-else-if="type === 'network'" class="pv-inner pv-network">
       <svg viewBox="0 0 220 140" class="pv-network-svg">
         <line x1="110" y1="70" x2="36" y2="24" />
         <line x1="110" y1="70" x2="36" y2="116" />
         <line x1="110" y1="70" x2="184" y2="24" />
         <line x1="110" y1="70" x2="184" y2="116" />
+        <circle class="pv-port" cx="36" cy="24" r="3" />
+        <circle class="pv-port" cx="36" cy="116" r="3" />
+        <circle class="pv-port" cx="184" cy="24" r="3" />
+        <circle class="pv-port" cx="184" cy="116" r="3" />
+        <circle class="pv-pulse" r="3">
+          <animateMotion dur="2.4s" repeatCount="indefinite" path="M110,70 L36,116" />
+        </circle>
       </svg>
       <span class="pv-node pv-node-gateway">Gateway</span>
       <span class="pv-node" style="left:16.4%; top:17.1%">Auth</span>
-      <span class="pv-node" style="left:16.4%; top:82.9%">Chat</span>
+      <span class="pv-node pv-node-live" style="left:16.4%; top:82.9%">Chat<span class="pv-live-dot"></span></span>
       <span class="pv-node" style="left:83.6%; top:17.1%">Orders</span>
       <span class="pv-node" style="left:83.6%; top:82.9%">Users</span>
     </div>
@@ -159,6 +166,16 @@ defineProps({
   stroke-width: 1;
 }
 
+.pv-port {
+  fill: var(--paper-raised);
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+
+.pv-pulse {
+  fill: var(--green);
+}
+
 .pv-node {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -177,6 +194,28 @@ defineProps({
   background: var(--green-900);
   border-color: var(--green-900);
   font-weight: 500;
+}
+
+.pv-node-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-color: var(--green);
+  color: var(--green-600);
+}
+
+.pv-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-tint);
+  animation: pv-blink 1.8s ease-in-out infinite;
+}
+
+@keyframes pv-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 
 /* ticket */
