@@ -26,7 +26,7 @@ defineProps({
 
     <!-- network: gateway + service nodes, live pulse on the chat socket -->
     <div v-else-if="type === 'network'" class="pv-inner pv-network">
-      <svg viewBox="0 0 220 140" class="pv-network-svg">
+      <svg viewBox="0 0 220 140" preserveAspectRatio="none" class="pv-network-svg">
         <line x1="110" y1="70" x2="36" y2="24" />
         <line x1="110" y1="70" x2="36" y2="116" />
         <line x1="110" y1="70" x2="184" y2="24" />
