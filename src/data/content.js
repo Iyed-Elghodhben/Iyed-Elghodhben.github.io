@@ -52,6 +52,7 @@ export const projects = [
     stack: [],
     highlights: [
       "Owns calculation logic guaranteeing exact amount consistency across invoicing, quotations, payments, inventory, and ledger entries",
+      "Built the Traites (bills of exchange) module end to end — client and supplier traites, payment schedules, links to invoices and payments, PDF printing",
       "Built the integration to Tunisia's national e-invoicing system (TTN / El Fatoora) plus multiple local payment gateways",
       "Encoded Tunisian accounting and tax-compliance rules directly into document and payment workflows",
       "Designed a modular Laravel architecture documented end-to-end with Swagger",
