@@ -12,33 +12,37 @@ defineProps({
       <div class="pv-ledger-top">
         <span v-for="n in 4" :key="n" class="pv-ledger-line" :style="{ width: 40 + n * 12 + '%' }"></span>
       </div>
-      <span class="pv-badge">El Fatoora ✓</span>
+      <span class="pv-badge">El Fatoora ✓<span class="pv-live-dot"></span></span>
     </div>
 
-    <!-- geofence: concentric radius rings + pin -->
+    <!-- geofence: concentric radius rings + rotating radar sweep + pinging check-ins -->
     <div v-else-if="type === 'geofence'" class="pv-inner pv-geofence">
+      <span class="pv-radar-sweep"></span>
       <span class="pv-ring pv-ring-1"></span>
       <span class="pv-ring pv-ring-2"></span>
       <span class="pv-ring pv-ring-3"></span>
+      <span class="pv-ring pv-ring-ping"></span>
+      <span class="pv-ring pv-ring-ping pv-ring-ping-2"></span>
       <span class="pv-pin"></span>
       <span class="pv-badge pv-badge-bottom">Geo-fenced zone</span>
     </div>
 
-    <!-- network: gateway + service nodes, live pulse on the chat socket -->
+    <!-- network: gateway + service nodes, pulses relaying to each service in turn -->
     <div v-else-if="type === 'network'" class="pv-inner pv-network">
       <svg viewBox="0 0 220 140" preserveAspectRatio="none" class="pv-network-svg">
         <line x1="110" y1="70" x2="36" y2="24" />
         <line x1="110" y1="70" x2="36" y2="116" />
         <line x1="110" y1="70" x2="184" y2="24" />
         <line x1="110" y1="70" x2="184" y2="116" />
-        <circle class="pv-port" cx="36" cy="24" r="3" />
-        <circle class="pv-port" cx="36" cy="116" r="3" />
-        <circle class="pv-port" cx="184" cy="24" r="3" />
-        <circle class="pv-port" cx="184" cy="116" r="3" />
-        <circle class="pv-pulse" r="3">
-          <animateMotion dur="2.4s" repeatCount="indefinite" path="M110,70 L36,116" />
-        </circle>
       </svg>
+      <span class="pv-port" style="left:16.4%; top:17.1%"></span>
+      <span class="pv-port" style="left:16.4%; top:82.9%"></span>
+      <span class="pv-port" style="left:83.6%; top:17.1%"></span>
+      <span class="pv-port" style="left:83.6%; top:82.9%"></span>
+      <span class="pv-pulse" style="--tx:16.4%; --ty:17.1%; animation-delay:0s"></span>
+      <span class="pv-pulse" style="--tx:16.4%; --ty:82.9%; animation-delay:2s"></span>
+      <span class="pv-pulse" style="--tx:83.6%; --ty:17.1%; animation-delay:4s"></span>
+      <span class="pv-pulse" style="--tx:83.6%; --ty:82.9%; animation-delay:6s"></span>
       <span class="pv-node pv-node-gateway">Gateway</span>
       <span class="pv-node" style="left:16.4%; top:17.1%">Auth</span>
       <span class="pv-node pv-node-live" style="left:16.4%; top:82.9%">Chat<span class="pv-live-dot"></span></span>
@@ -54,7 +58,12 @@ defineProps({
           <span class="pv-ticket-route">Tunis → Ariana</span>
         </div>
         <div class="pv-ticket-stub">
-          <span v-for="n in 5" :key="n" class="pv-ticket-dot"></span>
+          <span
+            v-for="n in 5"
+            :key="n"
+            class="pv-ticket-dot"
+            :style="{ animationDelay: n * 0.45 + 's' }"
+          ></span>
         </div>
       </div>
     </div>
@@ -105,6 +114,9 @@ defineProps({
   position: absolute;
   right: 36px;
   bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--amber);
@@ -132,6 +144,48 @@ defineProps({
 .pv-ring-1 { width: 60px; height: 60px; opacity: 0.9; }
 .pv-ring-2 { width: 110px; height: 110px; opacity: 0.5; }
 .pv-ring-3 { width: 160px; height: 160px; opacity: 0.25; }
+
+.pv-ring-ping {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+  opacity: 0.9;
+  animation: pv-ping 6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.pv-ring-ping-2 {
+  animation-delay: 3s;
+}
+
+@keyframes pv-ping {
+  0% { width: 20px; height: 20px; opacity: 0.9; }
+  100% { width: 200px; height: 200px; opacity: 0; }
+}
+
+.pv-radar-sweep {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  animation: pv-sweep-rotate 10s linear infinite;
+}
+
+.pv-radar-sweep::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(from 0deg, transparent 0deg, transparent 290deg, var(--green) 345deg, transparent 360deg);
+  opacity: 0.4;
+}
+
+@keyframes pv-sweep-rotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
 
 .pv-pin {
   position: absolute;
@@ -167,13 +221,29 @@ defineProps({
 }
 
 .pv-port {
-  fill: var(--paper-raised);
-  stroke: var(--rule-strong);
-  stroke-width: 1;
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  transform: translate(-50%, -50%);
 }
 
 .pv-pulse {
-  fill: var(--green);
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  transform: translate(-50%, -50%);
+  animation: pv-travel 8s ease-in-out infinite;
+}
+
+@keyframes pv-travel {
+  0%, 4% { left: 50%; top: 50%; }
+  50%, 54% { left: var(--tx); top: var(--ty); }
+  100% { left: 50%; top: 50%; }
 }
 
 .pv-node {
@@ -210,7 +280,7 @@ defineProps({
   border-radius: 50%;
   background: var(--green);
   box-shadow: 0 0 0 3px var(--green-tint);
-  animation: pv-blink 1.8s ease-in-out infinite;
+  animation: pv-blink 4s ease-in-out infinite;
 }
 
 @keyframes pv-blink {
@@ -269,5 +339,11 @@ defineProps({
   height: 5px;
   border-radius: 50%;
   background: var(--rule-strong);
+  animation: pv-scan 5s ease-in-out infinite;
+}
+
+@keyframes pv-scan {
+  0%, 100% { background: var(--rule-strong); }
+  35% { background: var(--green); }
 }
 </style>
