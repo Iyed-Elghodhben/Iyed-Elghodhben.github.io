@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 // Set after deploying the worker (`npm run deploy` in /worker) — wrangler prints the URL.
 const AGENT_ENDPOINT = "https://iyed-career-agent.iyed-elghodhben.workers.dev";
@@ -17,6 +17,14 @@ const isLoading = ref(false);
 const error = ref("");
 const messagesEl = ref(null);
 const inputEl = ref(null);
+
+const leadEmail = ref("");
+const leadDismissed = ref(false);
+const leadStatus = ref("idle"); // idle | sending | sent | error
+
+const showLeadPrompt = computed(
+  () => !leadDismissed.value && leadStatus.value !== "sent" && messages.value.some((m) => m.role === "assistant"),
+);
 
 async function scrollToBottom() {
   await nextTick();
@@ -78,6 +86,26 @@ async function send() {
     scrollToBottom();
   }
 }
+
+async function submitLead() {
+  const email = leadEmail.value.trim();
+  if (!email || leadStatus.value === "sending") return;
+
+  leadStatus.value = "sending";
+
+  try {
+    const res = await fetch(`${AGENT_ENDPOINT}/lead`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, messages: messages.value.slice(-12) }),
+    });
+
+    if (!res.ok) throw new Error("bad-status");
+    leadStatus.value = "sent";
+  } catch {
+    leadStatus.value = "error";
+  }
+}
 </script>
 
 <template>
@@ -117,6 +145,27 @@ async function send() {
           {{ q }}
         </button>
       </div>
+
+      <div v-if="showLeadPrompt" class="agent-lead">
+        <p>Want me to notify Iyed you're interested? Drop your email and I'll pass it along.</p>
+        <form class="agent-lead-form" @submit.prevent="submitLead">
+          <input
+            v-model="leadEmail"
+            type="email"
+            required
+            placeholder="you@company.com"
+            :disabled="leadStatus === 'sending'"
+          />
+          <button class="btn btn-primary" type="submit" :disabled="leadStatus === 'sending' || !leadEmail.trim()">
+            Notify Iyed
+          </button>
+        </form>
+        <div class="agent-lead-footer">
+          <p v-if="leadStatus === 'error'" class="agent-error">Couldn't send that — try again, or email him directly.</p>
+          <button type="button" class="agent-lead-dismiss" @click="leadDismissed = true">No thanks</button>
+        </div>
+      </div>
+      <p v-else-if="leadStatus === 'sent'" class="agent-lead-success">✓ Done — Iyed will reach out to you directly.</p>
 
       <form class="agent-input" @submit.prevent="send">
         <textarea
@@ -252,6 +301,74 @@ async function send() {
 .agent-suggestions .tag:hover {
   border-color: var(--green-600);
   color: var(--green-600);
+}
+
+.agent-lead {
+  padding: 12px 18px;
+  border-top: 1px solid var(--rule);
+  background: var(--green-tint);
+}
+
+.agent-lead p {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.agent-lead-form {
+  display: flex;
+  gap: 8px;
+}
+
+.agent-lead-form input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.agent-lead-form input:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+.agent-lead-form .btn {
+  padding: 8px 14px;
+  font-size: 0.78rem;
+}
+
+.agent-lead-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.agent-lead-dismiss {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: auto;
+}
+
+.agent-lead-success {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  color: var(--green-600);
+  font-family: var(--font-mono);
+  border-top: 1px solid var(--rule);
 }
 
 .agent-input {

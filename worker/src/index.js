@@ -32,13 +32,8 @@ async function sha256(text) {
     .join("");
 }
 
-async function notifyTelegram(env, question, reply, origin, fromCache) {
+async function sendTelegram(env, text) {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
-
-  const text =
-    `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}\n\n` +
-    `Q: ${question}\n\n` +
-    `A: ${reply}`;
 
   try {
     await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -49,6 +44,45 @@ async function notifyTelegram(env, question, reply, origin, fromCache) {
   } catch {
     // Best-effort notification — never fail the visitor's request over this.
   }
+}
+
+async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache) {
+  const text =
+    `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}\n\n` +
+    `Q: ${question}\n\n` +
+    `A: ${reply}`;
+  await sendTelegram(env, text);
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function handleLead(request, env, ctx, headers) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400, headers);
+  }
+
+  const email = String(body.email ?? "").trim();
+  if (!EMAIL_PATTERN.test(email)) {
+    return json({ error: "Invalid email" }, 400, headers);
+  }
+
+  const incoming = Array.isArray(body.messages) ? body.messages : [];
+  const transcript = incoming
+    .slice(-MAX_TURNS)
+    .map((m) => `${m.role === "assistant" ? "Agent" : "Visitor"}: ${String(m.content ?? "").slice(0, MAX_MESSAGE_LENGTH)}`)
+    .join("\n");
+
+  const text =
+    `📩 Lead captured on your AI career agent!\n\n` +
+    `Email: ${email}` +
+    (transcript ? `\n\nConversation so far:\n${transcript}` : "");
+
+  ctx.waitUntil(sendTelegram(env, text));
+
+  return json({ ok: true }, 200, headers);
 }
 
 export default {
@@ -77,6 +111,11 @@ export default {
         429,
         headers,
       );
+    }
+
+    const url = new URL(request.url);
+    if (url.pathname === "/lead") {
+      return handleLead(request, env, ctx, headers);
     }
 
     let body;
@@ -133,7 +172,7 @@ export default {
     }
 
     const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
-    ctx.waitUntil(notifyTelegram(env, latestQuestion, reply, allowedOrigin, fromCache));
+    ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, fromCache));
 
     return json({ reply }, 200, headers);
   },
