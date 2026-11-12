@@ -46,9 +46,34 @@ async function sendTelegram(env, text) {
   }
 }
 
-async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache) {
+// Best-effort, free IP→network lookup. Reveals the visitor's company only when they're on
+// a corporate network/VPN — for most home/mobile visitors this just shows their ISP, which
+// is still a useful "nothing to see here" signal but not a real identification method.
+async function lookupNetwork(ip) {
+  if (!ip || ip === "unknown") return null;
+  try {
+    const res = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,city,isp,org`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.status === "success" ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatNetwork(info) {
+  if (!info) return "";
+  const org = info.org && info.org !== info.isp ? `${info.org} (${info.isp})` : info.isp;
+  const place = [info.city, info.country].filter(Boolean).join(", ");
+  return [org, place].filter(Boolean).join(" · ");
+}
+
+async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache, ip) {
+  const network = formatNetwork(await lookupNetwork(ip));
   const text =
-    `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}\n\n` +
+    `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}` +
+    (network ? `\n🌐 ${network}` : "") +
+    `\n\n` +
     `Q: ${question}\n\n` +
     `A: ${reply}`;
   await sendTelegram(env, text);
@@ -56,7 +81,30 @@ async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache)
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-async function handleLead(request, env, ctx, headers) {
+// Domains that tell us nothing about the visitor's employer.
+const FREE_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "yahoo.com",
+  "yahoo.fr",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "protonmail.com",
+  "proton.me",
+  "aol.com",
+  "gmx.com",
+  "yandex.com",
+  "mail.com",
+  "zoho.com",
+]);
+
+function emailDomain(email) {
+  const at = email.lastIndexOf("@");
+  return at === -1 ? "" : email.slice(at + 1).toLowerCase();
+}
+
+async function handleLead(request, env, ctx, headers, ip) {
   let body;
   try {
     body = await request.json();
@@ -69,6 +117,10 @@ async function handleLead(request, env, ctx, headers) {
     return json({ error: "Invalid email" }, 400, headers);
   }
 
+  const domain = emailDomain(email);
+  const companyHint = domain && !FREE_EMAIL_DOMAINS.has(domain) ? `\n🏢 Likely company: ${domain}` : "";
+  const network = formatNetwork(await lookupNetwork(ip));
+
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   const transcript = incoming
     .slice(-MAX_TURNS)
@@ -78,6 +130,8 @@ async function handleLead(request, env, ctx, headers) {
   const text =
     `📩 Lead captured on your AI career agent!\n\n` +
     `Email: ${email}` +
+    companyHint +
+    (network ? `\n🌐 ${network}` : "") +
     (transcript ? `\n\nConversation so far:\n${transcript}` : "");
 
   ctx.waitUntil(sendTelegram(env, text));
@@ -85,14 +139,89 @@ async function handleLead(request, env, ctx, headers) {
   return json({ ok: true }, 200, headers);
 }
 
+const TRACK_EVENTS = new Set([
+  "chat_opened",
+  "chat_message_sent",
+  "suggestion_clicked",
+  "lead_submitted",
+  "section_about",
+  "section_work",
+  "section_skills",
+  "section_experience",
+  "section_contact",
+]);
+
+async function incrementCounter(env, event) {
+  const today = new Date().toISOString().slice(0, 10);
+  const totalKey = `analytics:total:${event}`;
+  const dailyKey = `analytics:daily:${event}:${today}`;
+
+  const [totalRaw, dailyRaw] = await Promise.all([env.AGENT_CACHE.get(totalKey), env.AGENT_CACHE.get(dailyKey)]);
+
+  await Promise.all([
+    env.AGENT_CACHE.put(totalKey, String((parseInt(totalRaw, 10) || 0) + 1)),
+    env.AGENT_CACHE.put(dailyKey, String((parseInt(dailyRaw, 10) || 0) + 1), {
+      expirationTtl: 60 * 60 * 24 * 90,
+    }),
+  ]);
+}
+
+async function handleTrack(request, env, ctx, headers) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400, headers);
+  }
+
+  const event = String(body.event ?? "");
+  if (!TRACK_EVENTS.has(event)) {
+    return json({ error: "Unknown event" }, 400, headers);
+  }
+
+  ctx.waitUntil(incrementCounter(env, event));
+
+  return json({ ok: true }, 200, headers);
+}
+
+async function handleStats(request, env, headers) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token");
+
+  if (!env.STATS_TOKEN || token !== env.STATS_TOKEN) {
+    return json({ error: "Unauthorized" }, 401, headers);
+  }
+
+  const totals = {};
+  const list = await env.AGENT_CACHE.list({ prefix: "analytics:total:" });
+  await Promise.all(
+    list.keys.map(async (k) => {
+      const event = k.name.slice("analytics:total:".length);
+      totals[event] = parseInt(await env.AGENT_CACHE.get(k.name), 10) || 0;
+    }),
+  );
+
+  return json({ totals }, 200, headers);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin") || "";
     const allowedOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "";
     const headers = corsHeaders(allowedOrigin || "null");
+    const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers });
+    }
+
+    // /stats is opened directly in a browser (no Origin header, no CORS relevance) and is
+    // protected by a token instead of the origin allowlist used by everything else below.
+    if (url.pathname === "/stats") {
+      if (request.method !== "GET") {
+        return json({ error: "Method not allowed" }, 405, headers);
+      }
+      return handleStats(request, env, headers);
     }
 
     if (!allowedOrigin) {
@@ -113,9 +242,12 @@ export default {
       );
     }
 
-    const url = new URL(request.url);
     if (url.pathname === "/lead") {
-      return handleLead(request, env, ctx, headers);
+      return handleLead(request, env, ctx, headers, ip);
+    }
+
+    if (url.pathname === "/track") {
+      return handleTrack(request, env, ctx, headers);
     }
 
     let body;
@@ -172,7 +304,7 @@ export default {
     }
 
     const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
-    ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, fromCache));
+    ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, fromCache, ip));
 
     return json({ reply }, 200, headers);
   },

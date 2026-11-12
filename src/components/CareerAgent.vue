@@ -1,8 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
-
-// Set after deploying the worker (`npm run deploy` in /worker) — wrangler prints the URL.
-const AGENT_ENDPOINT = "https://iyed-career-agent.iyed-elghodhben.workers.dev";
+import { AGENT_ENDPOINT, track } from "../lib/analytics";
 
 const suggestions = [
   "What's his strongest skill?",
@@ -34,6 +32,7 @@ async function scrollToBottom() {
 async function toggleOpen() {
   isOpen.value = !isOpen.value;
   if (isOpen.value) {
+    track("chat_opened");
     await nextTick();
     inputEl.value?.focus();
   }
@@ -49,6 +48,7 @@ onMounted(() => window.addEventListener("keydown", onKeydown));
 onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
 async function ask(question) {
+  track("suggestion_clicked");
   draft.value = question;
   await send();
 }
@@ -57,6 +57,7 @@ async function send() {
   const content = draft.value.trim();
   if (!content || isLoading.value) return;
 
+  track("chat_message_sent");
   messages.value.push({ role: "user", content });
   draft.value = "";
   error.value = "";
@@ -102,6 +103,7 @@ async function submitLead() {
 
     if (!res.ok) throw new Error("bad-status");
     leadStatus.value = "sent";
+    track("lead_submitted");
   } catch {
     leadStatus.value = "error";
   }

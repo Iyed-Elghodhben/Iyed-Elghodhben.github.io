@@ -3,7 +3,7 @@ import { experience, education } from "../data/content";
 </script>
 
 <template>
-  <section id="experience" class="experience">
+  <section id="experience" class="experience" v-track-view="'section_experience'">
     <div class="container exp-grid">
       <div class="exp-head" v-reveal>
         <p class="eyebrow">04 — Experience</p>

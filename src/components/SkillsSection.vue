@@ -3,7 +3,7 @@ import { skills } from "../data/content";
 </script>
 
 <template>
-  <section id="skills" class="skills">
+  <section id="skills" class="skills" v-track-view="'section_skills'">
     <div class="container">
       <div class="skills-head" v-reveal>
         <p class="eyebrow">03 — Skills</p>

@@ -4,7 +4,7 @@ import ProjectCard from "./ProjectCard.vue";
 </script>
 
 <template>
-  <section id="work" class="work">
+  <section id="work" class="work" v-track-view="'section_work'">
     <div class="container">
       <div class="work-head" v-reveal>
         <p class="eyebrow">02 — Featured work</p>

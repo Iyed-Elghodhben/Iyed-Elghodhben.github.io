@@ -3,7 +3,7 @@ import { profile } from "../data/content";
 </script>
 
 <template>
-  <section id="contact" class="contact">
+  <section id="contact" class="contact" v-track-view="'section_contact'">
     <div class="container contact-grid">
       <div v-reveal>
         <p class="eyebrow contact-eyebrow">05 — Contact</p>

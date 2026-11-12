@@ -3,7 +3,7 @@ import { bio } from "../data/content";
 </script>
 
 <template>
-  <section id="about" class="about">
+  <section id="about" class="about" v-track-view="'section_about'">
     <div class="container about-grid">
       <div class="about-head" v-reveal>
         <p class="eyebrow">01 — About</p>
