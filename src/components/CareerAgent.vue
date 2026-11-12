@@ -62,6 +62,11 @@ async function send() {
       body: JSON.stringify({ messages: messages.value.slice(-12) }),
     });
 
+    if (res.status === 429) {
+      error.value = "You're asking a lot of questions at once — give it a moment and try again.";
+      return;
+    }
+
     if (!res.ok) throw new Error("bad-status");
 
     const data = await res.json();

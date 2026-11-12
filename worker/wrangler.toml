@@ -4,3 +4,12 @@ compatibility_date = "2024-11-01"
 
 [ai]
 binding = "AI"
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 8, period = 60 }
+
+[[kv_namespaces]]
+binding = "AGENT_CACHE"
+id = "8fb6975f801c440fbf548c6da7cbfdf6"

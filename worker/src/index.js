@@ -25,11 +25,18 @@ function json(data, status, headers) {
   });
 }
 
-async function notifyTelegram(env, question, reply, origin) {
+async function sha256(text) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function notifyTelegram(env, question, reply, origin, fromCache) {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
 
   const text =
-    `🔔 New question on your AI career agent (${origin})\n\n` +
+    `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}\n\n` +
     `Q: ${question}\n\n` +
     `A: ${reply}`;
 
@@ -62,6 +69,16 @@ export default {
       return json({ error: "Method not allowed" }, 405, headers);
     }
 
+    const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success: withinLimit } = await env.RATE_LIMITER.limit({ key: ip });
+    if (!withinLimit) {
+      return json(
+        { error: "Too many requests — please wait a moment before asking again." },
+        429,
+        headers,
+      );
+    }
+
     let body;
     try {
       body = await request.json();
@@ -76,29 +93,47 @@ export default {
       return json({ error: "No messages provided" }, 400, headers);
     }
 
-    const aiMessages = [
-      { role: "system", content: buildSystemPrompt() },
-      ...messages.map((m) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: String(m.content ?? "").slice(0, MAX_MESSAGE_LENGTH),
-      })),
-    ];
+    const systemPrompt = buildSystemPrompt();
 
-    const model = env.AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fp8";
+    // Only cache single-turn conversations — once there's back-and-forth, the question
+    // alone no longer determines the answer. The system prompt is folded into the key so
+    // edits to content.js naturally invalidate stale cache entries.
+    const isFirstTurn = messages.length === 1 && messages[0].role !== "assistant";
+    const normalizedQuestion = isFirstTurn ? String(messages[0].content ?? "").trim().toLowerCase() : "";
+    const cacheKey = isFirstTurn ? await sha256(`${systemPrompt}|${normalizedQuestion}`) : null;
 
-    let result;
-    try {
-      result = await env.AI.run(model, { messages: aiMessages, max_tokens: 400, temperature: 0.4 });
-    } catch (err) {
-      return json({ error: "Could not reach Workers AI", detail: String(err?.message || err) }, 502, headers);
+    let reply = cacheKey ? await env.AGENT_CACHE.get(cacheKey) : null;
+    const fromCache = Boolean(reply);
+
+    if (!reply) {
+      const aiMessages = [
+        { role: "system", content: systemPrompt },
+        ...messages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: String(m.content ?? "").slice(0, MAX_MESSAGE_LENGTH),
+        })),
+      ];
+
+      const model = env.AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fp8";
+
+      let result;
+      try {
+        result = await env.AI.run(model, { messages: aiMessages, max_tokens: 400, temperature: 0.4 });
+      } catch (err) {
+        return json({ error: "Could not reach Workers AI", detail: String(err?.message || err) }, 502, headers);
+      }
+
+      reply =
+        (typeof result?.response === "string" ? result.response.trim() : "") ||
+        "Sorry, I couldn't come up with an answer to that — try rephrasing, or reach out directly.";
+
+      if (cacheKey) {
+        ctx.waitUntil(env.AGENT_CACHE.put(cacheKey, reply, { expirationTtl: 60 * 60 * 24 * 7 }));
+      }
     }
 
-    const reply =
-      (typeof result?.response === "string" ? result.response.trim() : "") ||
-      "Sorry, I couldn't come up with an answer to that — try rephrasing, or reach out directly.";
-
     const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
-    ctx.waitUntil(notifyTelegram(env, latestQuestion, reply, allowedOrigin));
+    ctx.waitUntil(notifyTelegram(env, latestQuestion, reply, allowedOrigin, fromCache));
 
     return json({ reply }, 200, headers);
   },
