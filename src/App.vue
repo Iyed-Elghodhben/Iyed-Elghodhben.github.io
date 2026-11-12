@@ -7,6 +7,7 @@ import SkillsSection from "./components/SkillsSection.vue";
 import ExperienceSection from "./components/ExperienceSection.vue";
 import ContactSection from "./components/ContactSection.vue";
 import AppFooter from "./components/AppFooter.vue";
+import CareerAgent from "./components/CareerAgent.vue";
 </script>
 
 <template>
@@ -20,4 +21,5 @@ import AppFooter from "./components/AppFooter.vue";
     <ContactSection />
   </main>
   <AppFooter />
+  <CareerAgent />
 </template>
