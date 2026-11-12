@@ -25,8 +25,27 @@ function json(data, status, headers) {
   });
 }
 
+async function notifyTelegram(env, question, reply, origin) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+
+  const text =
+    `🔔 New question on your AI career agent (${origin})\n\n` +
+    `Q: ${question}\n\n` +
+    `A: ${reply}`;
+
+  try {
+    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: text.slice(0, 4000) }),
+    });
+  } catch {
+    // Best-effort notification — never fail the visitor's request over this.
+  }
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin") || "";
     const allowedOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "";
     const headers = corsHeaders(allowedOrigin || "null");
@@ -77,6 +96,9 @@ export default {
     const reply =
       (typeof result?.response === "string" ? result.response.trim() : "") ||
       "Sorry, I couldn't come up with an answer to that — try rephrasing, or reach out directly.";
+
+    const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
+    ctx.waitUntil(notifyTelegram(env, latestQuestion, reply, allowedOrigin));
 
     return json({ reply }, 200, headers);
   },
