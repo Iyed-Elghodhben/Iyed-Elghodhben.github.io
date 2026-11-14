@@ -1,4 +1,9 @@
-import { buildSystemPrompt, containsIberisStackLeak } from "./systemPrompt.js";
+import {
+  buildSystemPrompt,
+  containsIberisStackLeak,
+  IBERIS_TOPIC_PATTERN,
+  buildIberisDeflection,
+} from "./systemPrompt.js";
 
 const IBERIS_LEAK_FALLBACK =
   "I can't get into Iberis's internal tech stack — that's confidential, regardless of how the question is framed. " +
@@ -266,6 +271,19 @@ export default {
 
     if (messages.length === 0) {
       return json({ error: "No messages provided" }, 400, headers);
+    }
+
+    // Iberis project details (stack, features, how things work) are confidential under an
+    // NDA, and the system prompt alone doesn't reliably hold under a jailbreak (confirmed by
+    // direct testing). So don't let the model anywhere near the topic: if the conversation
+    // touches Iberis or any of its named features, skip the model entirely and always return
+    // the same fixed, safe answer — nothing left for a jailbreak to work on.
+    const touchesIberis = messages.some((m) => IBERIS_TOPIC_PATTERN.test(String(m.content ?? "")));
+    if (touchesIberis) {
+      const reply = buildIberisDeflection();
+      const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
+      ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, false, ip));
+      return json({ reply }, 200, headers);
     }
 
     const systemPrompt = buildSystemPrompt();
