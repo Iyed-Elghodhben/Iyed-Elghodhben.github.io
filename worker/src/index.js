@@ -41,18 +41,30 @@ async function sha256(text) {
     .join("");
 }
 
-async function sendTelegram(env, text) {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
-
+async function callTelegramApi(env, method, payload) {
+  if (!env.TELEGRAM_BOT_TOKEN) return null;
   try {
-    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: text.slice(0, 4000) }),
+      body: JSON.stringify(payload),
     });
+    return await res.json().catch(() => null);
   } catch {
-    // Best-effort notification — never fail the visitor's request over this.
+    return null;
   }
+}
+
+// Returns the sent message (so its id can be tracked, e.g. for a force-reply prompt), or null
+// if sending failed/isn't configured. Best-effort — never fails the visitor's request over it.
+async function sendTelegram(env, text, extra) {
+  if (!env.TELEGRAM_CHAT_ID) return null;
+  const data = await callTelegramApi(env, "sendMessage", {
+    chat_id: env.TELEGRAM_CHAT_ID,
+    text: text.slice(0, 4000),
+    ...extra,
+  });
+  return data?.result ?? null;
 }
 
 // Best-effort, free IP→network lookup. Reveals the visitor's company only when they're on
@@ -86,12 +98,15 @@ async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache,
   const text =
     `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}` +
     (network ? `\n🌐 ${network}` : "") +
-    (sessionId ? `\n💬 To reply directly: /reply ${sessionId} your message` : "") +
     `\n\n` +
     `Q: ${question}\n\n` +
     `A: ${reply}`;
 
-  await sendTelegram(env, text);
+  const replyMarkup = sessionId
+    ? { reply_markup: { inline_keyboard: [[{ text: "↩️ Reply to this visitor", callback_data: `reply:${sessionId}` }]] } }
+    : undefined;
+
+  await sendTelegram(env, text, replyMarkup);
   if (sessionId) {
     await env.AGENT_CACHE.put(`session-seen:${sessionId}`, "1", { expirationTtl: SESSION_SEEN_TTL });
   }
@@ -202,9 +217,44 @@ async function handleTrack(request, env, ctx, headers) {
   return json({ ok: true }, 200, headers);
 }
 
-// Matches "/reply <sessionId> <message text>" — the command Iyed types in Telegram to answer
-// a visitor directly. sessionId is the short code shown in the question notification.
+// Fallback for typing the command directly: "/reply <sessionId> <message text>".
 const REPLY_COMMAND_PATTERN = /^\/reply\s+(\S+)\s+([\s\S]+)$/;
+const CALLBACK_DATA_PATTERN = /^reply:(\S+)$/;
+const HUMAN_REPLY_TTL = 60 * 10;
+const FORCE_REPLY_TTL = 60 * 10; // plenty of time to type a reply after tapping the button
+
+async function deliverHumanReply(env, sessionId, replyText) {
+  const seen = await env.AGENT_CACHE.get(`session-seen:${sessionId}`);
+  if (seen) {
+    await env.AGENT_CACHE.put(`humanreply:${sessionId}`, replyText, { expirationTtl: HUMAN_REPLY_TTL });
+    await sendTelegram(env, "✅ Sent — if they're still on the page, it'll show up in their chat.");
+  } else {
+    await sendTelegram(env, `⌛ Don't recognize session "${sessionId}" — too long since that question, or it's a typo.`);
+  }
+}
+
+// Tapping "↩️ Reply to this visitor" sends this callback, which prompts Iyed with a
+// force-reply message — Telegram then shows a text box and, once he types normally and
+// sends, automatically links that message back to this prompt via reply_to_message. No
+// command syntax needed on his end.
+async function handleTelegramCallback(env, callbackQuery) {
+  const match = CALLBACK_DATA_PATTERN.exec(String(callbackQuery?.data ?? ""));
+  if (match) {
+    const sessionId = match[1];
+    const seen = await env.AGENT_CACHE.get(`session-seen:${sessionId}`);
+    if (seen) {
+      const sent = await sendTelegram(env, `Type your reply for session ${sessionId}:`, {
+        reply_markup: { force_reply: true, selective: true },
+      });
+      if (sent?.message_id) {
+        await env.AGENT_CACHE.put(`tgforce:${sent.message_id}`, sessionId, { expirationTtl: FORCE_REPLY_TTL });
+      }
+    } else {
+      await sendTelegram(env, `⌛ Session ${sessionId} has expired — the visitor's probably gone.`);
+    }
+  }
+  await callTelegramApi(env, "answerCallbackQuery", { callback_query_id: callbackQuery.id });
+}
 
 // Telegram calls this directly (no Origin header, no CORS relevance) once a webhook is
 // registered via setWebhook with a secret_token — verified below instead of the origin
@@ -226,18 +276,26 @@ async function handleTelegramWebhook(request, env) {
     return new Response("ok", { status: 200 }); // ack anyway — malformed updates aren't Telegram's problem to retry
   }
 
-  const text = typeof update?.message?.text === "string" ? update.message.text.trim() : "";
-  const match = text.match(REPLY_COMMAND_PATTERN);
+  if (update?.callback_query) {
+    await handleTelegramCallback(env, update.callback_query);
+    return new Response("ok", { status: 200 });
+  }
 
-  if (match) {
-    const [, sessionId, replyText] = match;
-    const seen = await env.AGENT_CACHE.get(`session-seen:${sessionId}`);
-    if (seen) {
-      await env.AGENT_CACHE.put(`humanreply:${sessionId}`, replyText.trim(), { expirationTtl: 60 * 10 });
-      await sendTelegram(env, "✅ Sent — if they're still on the page, it'll show up in their chat.");
-    } else {
-      await sendTelegram(env, `⌛ Don't recognize session "${sessionId}" — too long since that question, or it's a typo.`);
+  const message = update?.message;
+  const text = typeof message?.text === "string" ? message.text.trim() : "";
+
+  const promptId = message?.reply_to_message?.message_id;
+  if (promptId && text) {
+    const sessionId = await env.AGENT_CACHE.get(`tgforce:${promptId}`);
+    if (sessionId) {
+      await deliverHumanReply(env, sessionId, text);
+      return new Response("ok", { status: 200 });
     }
+  }
+
+  const match = REPLY_COMMAND_PATTERN.exec(text);
+  if (match) {
+    await deliverHumanReply(env, match[1], match[2].trim());
   }
 
   return new Response("ok", { status: 200 });
