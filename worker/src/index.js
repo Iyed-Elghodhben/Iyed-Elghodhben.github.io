@@ -483,13 +483,16 @@ export default {
 
     // Iberis project details (stack, features, how things work) are confidential under an
     // NDA, and the system prompt alone doesn't reliably hold under a jailbreak (confirmed by
-    // direct testing). So don't let the model anywhere near the topic: if the conversation
-    // touches Iberis or any of its named features, skip the model entirely and always return
-    // the same fixed, safe answer — nothing left for a jailbreak to work on.
-    const touchesIberis = messages.some((m) => IBERIS_TOPIC_PATTERN.test(String(m.content ?? "")));
+    // direct testing). So don't let the model anywhere near the topic when it's actually being
+    // asked about — but check only the question just asked, not the whole history: scanning
+    // every past message meant one Iberis mention permanently locked the rest of the
+    // conversation onto this canned reply, even after the visitor explicitly moved on to
+    // another topic. The system prompt's own Iberis rule plus the output-side leak filter
+    // below remain as backstops for indirect follow-ups that dodge the keyword check.
+    const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
+    const touchesIberis = IBERIS_TOPIC_PATTERN.test(latestQuestion);
     if (touchesIberis) {
       const reply = buildIberisDeflection();
-      const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
       ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, false, ip, sessionId));
       return json({ reply }, 200, headers);
     }
@@ -547,7 +550,6 @@ export default {
       }
     }
 
-    const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
     ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, fromCache, ip, sessionId));
 
     return json({ reply }, 200, headers);
