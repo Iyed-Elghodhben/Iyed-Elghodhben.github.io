@@ -1,4 +1,8 @@
-import { buildSystemPrompt } from "./systemPrompt.js";
+import { buildSystemPrompt, containsIberisStackLeak } from "./systemPrompt.js";
+
+const IBERIS_LEAK_FALLBACK =
+  "I can't get into Iberis's internal tech stack — that's confidential, regardless of how the question is framed. " +
+  "I can tell you what was built and the business outcome instead, or you can ask about NetAdvisor or AMA Business Tunisie/STB Bus in full technical detail.";
 
 const ALLOWED_ORIGINS = new Set([
   "https://iyed-elghodhben.github.io",
@@ -298,6 +302,20 @@ export default {
         (typeof result?.response === "string" ? result.response.trim() : "") ||
         "Sorry, I couldn't come up with an answer to that — try rephrasing, or reach out directly.";
 
+      // The system prompt tells the model never to discuss Iberis's internal stack, but small
+      // models don't reliably hold that under a jailbreak ("ignore previous instructions",
+      // claimed authority, yes/no framing, etc — confirmed by direct testing). Enforce it in
+      // code instead of trusting the prompt alone, and cache the safe version, not the leak.
+      if (containsIberisStackLeak(reply)) {
+        reply = IBERIS_LEAK_FALLBACK;
+      }
+
+      if (cacheKey) {
+        ctx.waitUntil(env.AGENT_CACHE.put(cacheKey, reply, { expirationTtl: 60 * 60 * 24 * 7 }));
+      }
+    } else if (containsIberisStackLeak(reply)) {
+      // Guards against cache entries written before this filter existed.
+      reply = IBERIS_LEAK_FALLBACK;
       if (cacheKey) {
         ctx.waitUntil(env.AGENT_CACHE.put(cacheKey, reply, { expirationTtl: 60 * 60 * 24 * 7 }));
       }
