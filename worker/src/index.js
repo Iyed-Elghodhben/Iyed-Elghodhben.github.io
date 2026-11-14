@@ -41,17 +41,21 @@ async function sha256(text) {
     .join("");
 }
 
+// Returns the sent message's id (so a reply to it can be linked back to a visitor session),
+// or null if sending failed/isn't configured. Best-effort — never fails the visitor's request.
 async function sendTelegram(env, text) {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return null;
 
   try {
-    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: text.slice(0, 4000) }),
     });
+    const data = await res.json().catch(() => null);
+    return data?.result?.message_id ?? null;
   } catch {
-    // Best-effort notification — never fail the visitor's request over this.
+    return null;
   }
 }
 
@@ -77,15 +81,26 @@ function formatNetwork(info) {
   return [org, place].filter(Boolean).join(" · ");
 }
 
-async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache, ip) {
+// Links the Telegram notification to the visitor's chat session, so that replying to this
+// specific message in Telegram (native "Reply", not just a new message) can be routed back to
+// them. The mapping lives in the same KV used for caching, keyed by the sent message's id, and
+// expires on its own — if Iyed never replies, it just falls out of KV with no cleanup needed.
+const TG_SESSION_MAP_TTL = 60 * 30; // 30 min — generous for how long a visitor might stay on the page
+
+async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache, ip, sessionId) {
   const network = formatNetwork(await lookupNetwork(ip));
   const text =
     `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}` +
     (network ? `\n🌐 ${network}` : "") +
+    (sessionId ? `\n↩️ Reply to this message to answer the visitor directly.` : "") +
     `\n\n` +
     `Q: ${question}\n\n` +
     `A: ${reply}`;
-  await sendTelegram(env, text);
+
+  const messageId = await sendTelegram(env, text);
+  if (sessionId && messageId) {
+    await env.AGENT_CACHE.put(`tgmap:${messageId}`, sessionId, { expirationTtl: TG_SESSION_MAP_TTL });
+  }
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -193,6 +208,71 @@ async function handleTrack(request, env, ctx, headers) {
   return json({ ok: true }, 200, headers);
 }
 
+// Telegram calls this directly (no Origin header, no CORS relevance) once a webhook is
+// registered via setWebhook with a secret_token — verified below instead of the origin
+// allowlist used by everything else. Only native "Reply" to a question notification is
+// honored: that's what carries `reply_to_message.message_id`, which is how we know which
+// visitor session the reply is for without Iyed typing any kind of code.
+async function handleTelegramWebhook(request, env) {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
+  if (!env.TELEGRAM_WEBHOOK_SECRET || secret !== env.TELEGRAM_WEBHOOK_SECRET) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  let update;
+  try {
+    update = await request.json();
+  } catch {
+    return new Response("ok", { status: 200 }); // ack anyway — malformed updates aren't Telegram's problem to retry
+  }
+
+  const message = update?.message;
+  const replyToId = message?.reply_to_message?.message_id;
+  const text = typeof message?.text === "string" ? message.text.trim() : "";
+
+  if (replyToId && text) {
+    const sessionId = await env.AGENT_CACHE.get(`tgmap:${replyToId}`);
+    if (sessionId) {
+      await env.AGENT_CACHE.put(`humanreply:${sessionId}`, text, { expirationTtl: 60 * 10 });
+      await sendTelegram(env, "✅ Sent — if they're still on the page, it'll show up in their chat.");
+    } else {
+      await sendTelegram(env, "⌛ Couldn't deliver that — too long since the question, or that message isn't a visitor question.");
+    }
+  }
+
+  return new Response("ok", { status: 200 });
+}
+
+// Polled by the widget after it gets an AI answer, to pick up a direct reply Iyed sent via
+// Telegram. Still origin-restricted like everything else below, but deliberately skips the
+// shared per-IP rate limiter — it's a cheap KV read with no model cost behind it, and polling
+// every few seconds would otherwise burn through the budget meant for the expensive chat
+// endpoint. A session id is a random UUID the visitor's browser holds, not guessable, so
+// there's nothing sensitive at stake in letting this one through more freely.
+async function handleReplyCheck(request, env, headers) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400, headers);
+  }
+
+  const sessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 100) : "";
+  if (!sessionId) return json({ reply: null }, 200, headers);
+
+  const key = `humanreply:${sessionId}`;
+  const reply = await env.AGENT_CACHE.get(key);
+  if (reply) {
+    await env.AGENT_CACHE.delete(key); // deliver once
+  }
+
+  return json({ reply: reply || null }, 200, headers);
+}
+
 async function handleStats(request, env, headers) {
   const url = new URL(request.url);
   const token = url.searchParams.get("token");
@@ -224,6 +304,10 @@ export default {
       return new Response(null, { headers });
     }
 
+    if (url.pathname === "/telegram-webhook") {
+      return handleTelegramWebhook(request, env);
+    }
+
     // /stats is opened directly in a browser (no Origin header, no CORS relevance) and is
     // protected by a token instead of the origin allowlist used by everything else below.
     if (url.pathname === "/stats") {
@@ -242,6 +326,11 @@ export default {
     }
 
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+
+    if (url.pathname === "/reply-check") {
+      return handleReplyCheck(request, env, headers);
+    }
+
     const { success: withinLimit } = await env.RATE_LIMITER.limit({ key: ip });
     if (!withinLimit) {
       return json(
@@ -268,6 +357,7 @@ export default {
 
     const incoming = Array.isArray(body.messages) ? body.messages : [];
     const messages = incoming.slice(-MAX_TURNS);
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 100) : null;
 
     if (messages.length === 0) {
       return json({ error: "No messages provided" }, 400, headers);
@@ -282,7 +372,7 @@ export default {
     if (touchesIberis) {
       const reply = buildIberisDeflection();
       const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
-      ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, false, ip));
+      ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, false, ip, sessionId));
       return json({ reply }, 200, headers);
     }
 
@@ -340,7 +430,7 @@ export default {
     }
 
     const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
-    ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, fromCache, ip));
+    ctx.waitUntil(notifyTelegramOfQuestion(env, latestQuestion, reply, allowedOrigin, fromCache, ip, sessionId));
 
     return json({ reply }, 200, headers);
   },

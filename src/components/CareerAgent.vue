@@ -16,6 +16,58 @@ const error = ref("");
 const messagesEl = ref(null);
 const inputEl = ref(null);
 
+// Identifies this chat to the worker so a direct reply Iyed sends via Telegram (native
+// "Reply" to the question notification) can be routed back to this specific visitor.
+// Persisted per-tab, not guessable, carries no personal data on its own.
+function getSessionId() {
+  const key = "career-agent-session";
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(key, id);
+  }
+  return id;
+}
+const sessionId = getSessionId();
+
+let humanReplyTimer = null;
+let humanReplyDeadline = 0;
+
+function armHumanReplyPolling() {
+  humanReplyDeadline = Date.now() + 5 * 60 * 1000; // keep listening for 5 min after the latest question
+  if (humanReplyTimer) return;
+  humanReplyTimer = setInterval(checkHumanReply, 4000);
+}
+
+function stopHumanReplyPolling() {
+  if (humanReplyTimer) {
+    clearInterval(humanReplyTimer);
+    humanReplyTimer = null;
+  }
+}
+
+async function checkHumanReply() {
+  if (Date.now() > humanReplyDeadline) {
+    stopHumanReplyPolling();
+    return;
+  }
+  try {
+    const res = await fetch(`${AGENT_ENDPOINT}/reply-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.reply) {
+      messages.value.push({ role: "human", content: data.reply });
+      scrollToBottom();
+    }
+  } catch {
+    // best-effort — just try again next tick
+  }
+}
+
 const leadEmail = ref("");
 const leadDismissed = ref(false);
 const leadStatus = ref("idle"); // idle | sending | sent | error
@@ -45,7 +97,10 @@ function onKeydown(e) {
 }
 
 onMounted(() => window.addEventListener("keydown", onKeydown));
-onUnmounted(() => window.removeEventListener("keydown", onKeydown));
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKeydown);
+  stopHumanReplyPolling();
+});
 
 async function ask(question) {
   track("suggestion_clicked");
@@ -68,7 +123,7 @@ async function send() {
     const res = await fetch(AGENT_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: messages.value.slice(-12) }),
+      body: JSON.stringify({ messages: messages.value.slice(-12), sessionId }),
     });
 
     if (res.status === 429) {
@@ -80,6 +135,7 @@ async function send() {
 
     const data = await res.json();
     messages.value.push({ role: "assistant", content: data.reply });
+    armHumanReplyPolling();
   } catch {
     error.value = "Couldn't reach the agent right now — email iyed.elghodhben@gmail.com directly.";
   } finally {
@@ -134,6 +190,7 @@ async function submitLead() {
           I know Iyed's experience, projects, and skills in detail — ask me anything a resume can't answer quickly.
         </p>
         <div v-for="(m, i) in messages" :key="i" class="agent-message" :class="m.role">
+          <span v-if="m.role === 'human'" class="agent-human-badge">Iyed, personally</span>
           <p>{{ m.content }}</p>
         </div>
         <div v-if="isLoading" class="agent-message assistant agent-typing">
@@ -275,6 +332,21 @@ async function submitLead() {
   background: var(--paper);
   border: 1px solid var(--rule);
   color: var(--ink);
+}
+
+.agent-message.human p {
+  background: var(--green-tint);
+  border: 1px solid var(--green-600);
+  color: var(--ink);
+}
+
+.agent-human-badge {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--green-600);
+  margin-bottom: 3px;
 }
 
 .agent-typing p {
