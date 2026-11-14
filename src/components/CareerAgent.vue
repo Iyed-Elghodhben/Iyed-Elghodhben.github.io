@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { AGENT_ENDPOINT, track } from "../lib/analytics";
 
 const suggestions = [
@@ -8,8 +8,21 @@ const suggestions = [
   "Is he open to new roles?",
 ];
 
+// Persisted per-tab so a page refresh doesn't wipe the conversation the visitor was having —
+// without this, Iyed's reply could arrive after a reload and have nothing to show up in.
+const MESSAGES_KEY = "career-agent-messages";
+
+function loadSavedMessages() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(MESSAGES_KEY));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 const isOpen = ref(false);
-const messages = ref([]);
+const messages = ref(loadSavedMessages());
 const draft = ref("");
 const isLoading = ref(false);
 const error = ref("");
@@ -31,6 +44,14 @@ function getSessionId() {
   return id;
 }
 const sessionId = getSessionId();
+
+watch(
+  messages,
+  (value) => {
+    sessionStorage.setItem(MESSAGES_KEY, JSON.stringify(value));
+  },
+  { deep: true },
+);
 
 let humanReplyTimer = null;
 let humanReplyDeadline = 0;
@@ -98,7 +119,14 @@ function onKeydown(e) {
   }
 }
 
-onMounted(() => window.addEventListener("keydown", onKeydown));
+onMounted(() => {
+  window.addEventListener("keydown", onKeydown);
+  // A restored conversation (from a refresh) means a question already went out — resume
+  // listening for Iyed's reply instead of waiting for the visitor to send a new message.
+  if (messages.value.length > 0) {
+    armHumanReplyPolling();
+  }
+});
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
   stopHumanReplyPolling();
