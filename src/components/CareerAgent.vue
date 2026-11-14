@@ -59,7 +59,7 @@ let humanReplyDeadline = 0;
 function armHumanReplyPolling() {
   humanReplyDeadline = Date.now() + 5 * 60 * 1000; // keep listening for 5 min after the latest question
   if (humanReplyTimer) return;
-  humanReplyTimer = setInterval(checkHumanReply, 4000);
+  humanReplyTimer = setInterval(checkHumanReply, 1500);
 }
 
 function stopHumanReplyPolling() {
