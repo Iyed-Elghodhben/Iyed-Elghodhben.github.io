@@ -41,6 +41,10 @@ async function sha256(text) {
     .join("");
 }
 
+// Telegram returns 200 with a JSON body even on failure ({ok:false, description:"..."}), so a
+// plain try/catch around the fetch was silently discarding real errors (blocked bot, bad chat
+// id, malformed payload, etc). Record the last failure in KV so it's inspectable via /debug
+// instead of vanishing — this is diagnostic-only, not used anywhere in the actual reply flow.
 async function callTelegramApi(env, method, payload) {
   if (!env.TELEGRAM_BOT_TOKEN) return null;
   try {
@@ -49,8 +53,19 @@ async function callTelegramApi(env, method, payload) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return await res.json().catch(() => null);
-  } catch {
+    const data = await res.json().catch(() => null);
+    if (data && data.ok === false) {
+      await env.AGENT_CACHE.put(
+        "last-telegram-error",
+        JSON.stringify({ method, status: res.status, description: data.description, ts: Date.now() }),
+      );
+    }
+    return data;
+  } catch (err) {
+    await env.AGENT_CACHE.put(
+      "last-telegram-error",
+      JSON.stringify({ method, exception: String(err?.message || err), ts: Date.now() }),
+    );
     return null;
   }
 }
@@ -328,6 +343,21 @@ async function handleReplyCheck(request, env, headers) {
   return json({ reply: reply || null }, 200, headers);
 }
 
+// Disabled — was used to track down the TELEGRAM_BOT_TOKEN mismatch that silently broke
+// notifications. Reads back whatever callTelegramApi last recorded as a failure. Uncomment
+// this and its route below (search "/debug") if Telegram delivery breaks again.
+// async function handleDebug(request, env, headers) {
+//   const url = new URL(request.url);
+//   const token = url.searchParams.get("token");
+//
+//   if (!env.DEBUG_TOKEN || token !== env.DEBUG_TOKEN) {
+//     return json({ error: "Unauthorized" }, 401, headers);
+//   }
+//
+//   const lastError = await env.AGENT_CACHE.get("last-telegram-error");
+//   return json({ lastTelegramError: lastError ? JSON.parse(lastError) : null }, 200, headers);
+// }
+
 async function handleStats(request, env, headers) {
   const url = new URL(request.url);
   const token = url.searchParams.get("token");
@@ -371,6 +401,13 @@ export default {
       }
       return handleStats(request, env, headers);
     }
+
+    // if (url.pathname === "/debug") {
+    //   if (request.method !== "GET") {
+    //     return json({ error: "Method not allowed" }, 405, headers);
+    //   }
+    //   return handleDebug(request, env, headers);
+    // }
 
     if (!allowedOrigin) {
       return json({ error: "Origin not allowed" }, 403, headers);

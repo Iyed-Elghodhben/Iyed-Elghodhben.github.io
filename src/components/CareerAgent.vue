@@ -113,24 +113,14 @@ async function toggleOpen() {
   }
 }
 
-function onKeydown(e) {
-  if (e.key === "Escape" && isOpen.value) {
-    isOpen.value = false;
-  }
-}
-
 onMounted(() => {
-  window.addEventListener("keydown", onKeydown);
   // A restored conversation (from a refresh) means a question already went out — resume
   // listening for Iyed's reply instead of waiting for the visitor to send a new message.
   if (messages.value.length > 0) {
     armHumanReplyPolling();
   }
 });
-onUnmounted(() => {
-  window.removeEventListener("keydown", onKeydown);
-  stopHumanReplyPolling();
-});
+onUnmounted(stopHumanReplyPolling);
 
 async function ask(question) {
   track("suggestion_clicked");
@@ -209,7 +199,14 @@ async function submitLead() {
       <span>{{ isOpen ? "Close" : "Ask my AI agent" }}</span>
     </button>
 
-    <div v-if="isOpen" id="career-agent-panel" class="agent-panel" role="dialog" aria-label="AI career agent chat">
+    <div
+      v-if="isOpen"
+      id="career-agent-panel"
+      class="agent-panel"
+      role="dialog"
+      aria-label="AI career agent chat"
+      @keydown.esc="isOpen = false"
+    >
       <header class="agent-header">
         <p class="eyebrow">AI Career Agent</p>
         <h3>Ask about Iyed's work</h3>
