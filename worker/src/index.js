@@ -425,11 +425,37 @@ export default {
 
     const { success: withinLimit } = await env.RATE_LIMITER.limit({ key: ip });
     if (!withinLimit) {
-      return json(
-        { error: "Too many requests — please wait a moment before asking again." },
-        429,
-        headers,
+      // /lead and /track aren't conversational, so a plain rejection is fine there. The main
+      // chat endpoint is different: rather than leave the visitor stuck on an error, skip the
+      // (costly) model call but still notify Iyed with the same tap-to-reply button, and hand
+      // the visitor a reply that keeps the widget listening for him instead of a dead end.
+      if (url.pathname === "/lead" || url.pathname === "/track") {
+        return json(
+          { error: "Too many requests — please wait a moment before asking again." },
+          429,
+          headers,
+        );
+      }
+
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: "Invalid JSON" }, 400, headers);
+      }
+
+      const incoming = Array.isArray(body.messages) ? body.messages : [];
+      const messages = incoming.slice(-MAX_TURNS);
+      const sessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 100) : null;
+      const latestQuestion = [...messages].reverse().find((m) => m.role !== "assistant")?.content || "";
+      const reply =
+        "You're asking a lot of questions at once — I'm pausing for a moment, but Iyed might jump in personally if he's around.";
+
+      ctx.waitUntil(
+        notifyTelegramOfQuestion(env, latestQuestion, "[rate limited — visitor is waiting for a human reply]", allowedOrigin, false, ip, sessionId),
       );
+
+      return json({ reply }, 200, headers);
     }
 
     if (url.pathname === "/lead") {
