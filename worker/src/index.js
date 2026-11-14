@@ -41,21 +41,17 @@ async function sha256(text) {
     .join("");
 }
 
-// Returns the sent message's id (so a reply to it can be linked back to a visitor session),
-// or null if sending failed/isn't configured. Best-effort — never fails the visitor's request.
 async function sendTelegram(env, text) {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return null;
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
 
   try {
-    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: text.slice(0, 4000) }),
     });
-    const data = await res.json().catch(() => null);
-    return data?.result?.message_id ?? null;
   } catch {
-    return null;
+    // Best-effort notification — never fail the visitor's request over this.
   }
 }
 
@@ -81,25 +77,23 @@ function formatNetwork(info) {
   return [org, place].filter(Boolean).join(" · ");
 }
 
-// Links the Telegram notification to the visitor's chat session, so that replying to this
-// specific message in Telegram (native "Reply", not just a new message) can be routed back to
-// them. The mapping lives in the same KV used for caching, keyed by the sent message's id, and
-// expires on its own — if Iyed never replies, it just falls out of KV with no cleanup needed.
-const TG_SESSION_MAP_TTL = 60 * 30; // 30 min — generous for how long a visitor might stay on the page
+// How long a "someone just asked a question" marker lives, so the webhook can tell a typo'd
+// session code from a real-but-expired one when Iyed replies.
+const SESSION_SEEN_TTL = 60 * 30; // 30 min — generous for how long a visitor might stay on the page
 
 async function notifyTelegramOfQuestion(env, question, reply, origin, fromCache, ip, sessionId) {
   const network = formatNetwork(await lookupNetwork(ip));
   const text =
     `🔔 New question on your AI career agent (${origin})${fromCache ? " [cached]" : ""}` +
     (network ? `\n🌐 ${network}` : "") +
-    (sessionId ? `\n↩️ Reply to this message to answer the visitor directly.` : "") +
+    (sessionId ? `\n💬 To reply directly: /reply ${sessionId} your message` : "") +
     `\n\n` +
     `Q: ${question}\n\n` +
     `A: ${reply}`;
 
-  const messageId = await sendTelegram(env, text);
-  if (sessionId && messageId) {
-    await env.AGENT_CACHE.put(`tgmap:${messageId}`, sessionId, { expirationTtl: TG_SESSION_MAP_TTL });
+  await sendTelegram(env, text);
+  if (sessionId) {
+    await env.AGENT_CACHE.put(`session-seen:${sessionId}`, "1", { expirationTtl: SESSION_SEEN_TTL });
   }
 }
 
@@ -208,11 +202,13 @@ async function handleTrack(request, env, ctx, headers) {
   return json({ ok: true }, 200, headers);
 }
 
+// Matches "/reply <sessionId> <message text>" — the command Iyed types in Telegram to answer
+// a visitor directly. sessionId is the short code shown in the question notification.
+const REPLY_COMMAND_PATTERN = /^\/reply\s+(\S+)\s+([\s\S]+)$/;
+
 // Telegram calls this directly (no Origin header, no CORS relevance) once a webhook is
 // registered via setWebhook with a secret_token — verified below instead of the origin
-// allowlist used by everything else. Only native "Reply" to a question notification is
-// honored: that's what carries `reply_to_message.message_id`, which is how we know which
-// visitor session the reply is for without Iyed typing any kind of code.
+// allowlist used by everything else.
 async function handleTelegramWebhook(request, env) {
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -230,17 +226,17 @@ async function handleTelegramWebhook(request, env) {
     return new Response("ok", { status: 200 }); // ack anyway — malformed updates aren't Telegram's problem to retry
   }
 
-  const message = update?.message;
-  const replyToId = message?.reply_to_message?.message_id;
-  const text = typeof message?.text === "string" ? message.text.trim() : "";
+  const text = typeof update?.message?.text === "string" ? update.message.text.trim() : "";
+  const match = text.match(REPLY_COMMAND_PATTERN);
 
-  if (replyToId && text) {
-    const sessionId = await env.AGENT_CACHE.get(`tgmap:${replyToId}`);
-    if (sessionId) {
-      await env.AGENT_CACHE.put(`humanreply:${sessionId}`, text, { expirationTtl: 60 * 10 });
+  if (match) {
+    const [, sessionId, replyText] = match;
+    const seen = await env.AGENT_CACHE.get(`session-seen:${sessionId}`);
+    if (seen) {
+      await env.AGENT_CACHE.put(`humanreply:${sessionId}`, replyText.trim(), { expirationTtl: 60 * 10 });
       await sendTelegram(env, "✅ Sent — if they're still on the page, it'll show up in their chat.");
     } else {
-      await sendTelegram(env, "⌛ Couldn't deliver that — too long since the question, or that message isn't a visitor question.");
+      await sendTelegram(env, `⌛ Don't recognize session "${sessionId}" — too long since that question, or it's a typo.`);
     }
   }
 
@@ -251,8 +247,9 @@ async function handleTelegramWebhook(request, env) {
 // Telegram. Still origin-restricted like everything else below, but deliberately skips the
 // shared per-IP rate limiter — it's a cheap KV read with no model cost behind it, and polling
 // every few seconds would otherwise burn through the budget meant for the expensive chat
-// endpoint. A session id is a random UUID the visitor's browser holds, not guessable, so
-// there's nothing sensitive at stake in letting this one through more freely.
+// endpoint. The session code is short enough for Iyed to type by hand, which also means it's
+// guessable in principle — the worst case is seeing a reply meant for a different visitor,
+// not a real security exposure, so that tradeoff is fine here.
 async function handleReplyCheck(request, env, headers) {
   let body;
   try {

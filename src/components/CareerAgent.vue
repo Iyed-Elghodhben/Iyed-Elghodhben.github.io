@@ -16,14 +16,16 @@ const error = ref("");
 const messagesEl = ref(null);
 const inputEl = ref(null);
 
-// Identifies this chat to the worker so a direct reply Iyed sends via Telegram (native
-// "Reply" to the question notification) can be routed back to this specific visitor.
-// Persisted per-tab, not guessable, carries no personal data on its own.
+// Identifies this chat to the worker so Iyed can reply directly via Telegram with
+// `/reply <sessionId> <message>` — short on purpose, since he has to type it on his phone.
+// Persisted per-tab, carries no personal data on its own.
 function getSessionId() {
   const key = "career-agent-session";
   let id = sessionStorage.getItem(key);
   if (!id) {
-    id = crypto.randomUUID();
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
     sessionStorage.setItem(key, id);
   }
   return id;
