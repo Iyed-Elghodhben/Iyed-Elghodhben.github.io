@@ -152,6 +152,43 @@ function emailDomain(email) {
   return at === -1 ? "" : email.slice(at + 1).toLowerCase();
 }
 
+// Same IP visiting again (reload, extra tab, scrolling triggering re-mount) within this
+// window doesn't get a second notification — otherwise a single visitor browsing the site
+// for a few minutes could fire off a dozen pings.
+const VISIT_DEDUPE_TTL = 60 * 30;
+
+async function notifyTelegramOfVisit(env, origin, ip, referrer, path) {
+  const network = formatNetwork(await lookupNetwork(ip));
+  const text =
+    `👀 Someone opened your portfolio (${origin})` +
+    (network ? `\n🌐 ${network}` : "") +
+    (path ? `\n📍 ${path}` : "") +
+    (referrer ? `\n↩️ From: ${referrer}` : "");
+
+  await sendTelegram(env, text);
+}
+
+async function handleVisit(request, env, ctx, headers, origin, ip) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+
+  const referrer = String(body.referrer ?? "").slice(0, 300);
+  const path = String(body.path ?? "").slice(0, 200);
+
+  const dedupeKey = `visit-seen:${ip}`;
+  const alreadySeen = await env.AGENT_CACHE.get(dedupeKey);
+  if (!alreadySeen) {
+    ctx.waitUntil(env.AGENT_CACHE.put(dedupeKey, "1", { expirationTtl: VISIT_DEDUPE_TTL }));
+    ctx.waitUntil(notifyTelegramOfVisit(env, origin, ip, referrer, path));
+  }
+
+  return json({ ok: true }, 200, headers);
+}
+
 async function handleLead(request, env, ctx, headers, ip) {
   let body;
   try {
@@ -429,7 +466,7 @@ export default {
       // chat endpoint is different: rather than leave the visitor stuck on an error, skip the
       // (costly) model call but still notify Iyed with the same tap-to-reply button, and hand
       // the visitor a reply that keeps the widget listening for him instead of a dead end.
-      if (url.pathname === "/lead" || url.pathname === "/track") {
+      if (url.pathname === "/lead" || url.pathname === "/track" || url.pathname === "/visit") {
         return json(
           { error: "Too many requests — please wait a moment before asking again." },
           429,
@@ -464,6 +501,10 @@ export default {
 
     if (url.pathname === "/track") {
       return handleTrack(request, env, ctx, headers);
+    }
+
+    if (url.pathname === "/visit") {
+      return handleVisit(request, env, ctx, headers, allowedOrigin, ip);
     }
 
     let body;
