@@ -22,7 +22,7 @@ import { profile } from "../data/content";
         </a>
         <a :href="profile.linkedin" target="_blank" rel="noopener" class="contact-row">
           <span class="contact-label">LinkedIn</span>
-          <span class="contact-value">linkedin.com/in/elghodhben-iyed</span>
+          <span class="contact-value">linkedin.com/in/iyed-elghodhben-036486191</span>
         </a>
         <div class="contact-row no-link">
           <span class="contact-label">Based in</span>

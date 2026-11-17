@@ -3,7 +3,7 @@ export const profile = {
   title: "Full-Stack Developer",
   location: "Ariana, Tunisia",
   email: "iyed.elghodhben@gmail.com",
-  linkedin: "https://linkedin.com/in/elghodhben-iyed",
+  linkedin: "https://www.linkedin.com/in/iyed-elghodhben-036486191/",
   resume: "/Elghodhben-Iyed-CV.pdf",
   positioning: "B2B SaaS engineer who makes financial compliance boring — in a good way.",
 };
