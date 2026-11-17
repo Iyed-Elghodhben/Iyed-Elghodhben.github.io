@@ -4,6 +4,7 @@ import { profile } from "../data/content";
 
 const open = ref(false);
 const active = ref("");
+const scrolled = ref(false);
 const links = [
   { href: "#work", label: "Work" },
   { href: "#skills", label: "Skills" },
@@ -15,6 +16,10 @@ function close() {
   open.value = false;
 }
 
+function onScroll() {
+  scrolled.value = window.scrollY > 8;
+}
+
 watch(open, (isOpen) => {
   document.body.style.overflow = isOpen ? "hidden" : "";
 });
@@ -22,6 +27,9 @@ watch(open, (isOpen) => {
 let observer;
 
 onMounted(() => {
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
   const targets = links
     .map((l) => document.querySelector(l.href))
     .filter(Boolean);
@@ -44,14 +52,18 @@ onMounted(() => {
 
 onUnmounted(() => {
   observer?.disconnect();
+  window.removeEventListener("scroll", onScroll);
   document.body.style.overflow = "";
 });
 </script>
 
 <template>
-  <header class="nav" @keydown.esc="close">
+  <header class="nav" :class="{ 'is-scrolled': scrolled }" @keydown.esc="close">
+    <div class="nav-accent" aria-hidden="true"></div>
     <div class="nav-inner container">
-      <a href="#top" class="nav-mark">EI<span>.</span></a>
+      <a href="#top" class="nav-mark">
+        <span class="nav-mark-badge">EI</span>
+      </a>
 
       <nav class="nav-links">
         <a
@@ -105,31 +117,73 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--paper) 92%, transparent);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--rule);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.nav.is-scrolled {
+  border-bottom-color: var(--rule-strong);
+  box-shadow: 0 10px 28px -20px rgba(15, 51, 34, 0.45);
+}
+
+.nav-accent {
+  height: 3px;
+  background: var(--green);
 }
 
 .nav-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
+  height: 72px;
+  transition: height 0.25s ease;
 }
 
 .nav-mark {
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  font-weight: 500;
+  display: inline-flex;
   text-decoration: none;
-  color: var(--ink-900);
+}
+
+.nav-mark-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--ink-900);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 500;
   letter-spacing: 0.02em;
-  transition: opacity 0.18s ease;
+  color: var(--ink-900);
+  transition: background 0.18s ease, color 0.18s ease;
 }
 
-.nav-mark:hover {
-  opacity: 0.72;
+.nav-mark-badge::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid var(--paper-raised);
 }
 
-.nav-mark span {
-  color: var(--green);
+.nav-mark:hover .nav-mark-badge {
+  background: var(--ink-900);
+  color: var(--paper-raised);
+}
+
+@media (min-width: 761px) {
+  .nav.is-scrolled .nav-inner {
+    height: 58px;
+  }
+  .nav.is-scrolled .nav-mark-badge {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 .nav-links {
@@ -193,10 +247,12 @@ onUnmounted(() => {
 }
 
 .nav-cta {
-  border: 1px solid var(--ink-900);
-  padding: 13px 16px;
+  background: var(--green-900);
+  border: 1px solid var(--green-900);
+  padding: 13px 18px;
   margin: -13px -2px;
-  color: var(--ink-900) !important;
+  color: var(--paper-raised) !important;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
 .nav-cta::after {
@@ -204,8 +260,9 @@ onUnmounted(() => {
 }
 
 .nav-cta:hover {
-  background: var(--ink-900);
-  color: var(--paper) !important;
+  background: var(--green-600);
+  border-color: var(--green-600);
+  transform: translateY(-1px);
 }
 
 .nav-toggle {
@@ -255,7 +312,7 @@ onUnmounted(() => {
   .nav-backdrop {
     display: block;
     position: fixed;
-    inset: 64px 0 0 0;
+    inset: 72px 0 0 0;
     background: rgba(14, 22, 18, 0.35);
     z-index: 49;
   }
@@ -264,7 +321,7 @@ onUnmounted(() => {
     position: fixed;
     left: 0;
     right: 0;
-    top: 64px;
+    top: 72px;
     z-index: 50;
     flex-direction: column;
     gap: 2px;
@@ -286,7 +343,10 @@ onUnmounted(() => {
     color: var(--green-600);
   }
   .nav-sheet a.nav-cta {
-    border-bottom: 1px solid var(--rule);
+    margin: 2px 14px 14px;
+    padding: 14px 18px;
+    text-align: center;
+    border: 1px solid var(--green-900);
   }
 }
 
