@@ -8,15 +8,20 @@ import ProjectCard from "./ProjectCard.vue";
     <div class="container">
       <div class="work-head" v-reveal>
         <p class="eyebrow">02 — Featured work</p>
-        <h2>Four systems, four kinds of complexity</h2>
+        <h2>Three systems, three kinds of complexity</h2>
         <p class="work-sub">
-          Selected for range: financial-domain depth, mobile &amp; native skill, systems
-          architecture, and public-facing polish.
+          Selected for range: financial-domain depth, mobile &amp; native skill, and systems
+          architecture.
         </p>
       </div>
 
       <div class="work-grid">
-        <ProjectCard v-for="p in projects" :key="p.slug" :project="p" />
+        <ProjectCard
+          v-for="(p, i) in projects"
+          :key="p.slug"
+          :project="p"
+          :class="{ 'card-wide': projects.length % 2 !== 0 && i === projects.length - 1 }"
+        />
       </div>
     </div>
   </section>

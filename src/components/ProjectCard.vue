@@ -176,4 +176,30 @@ const highlightsId = `${props.project.slug}-highlights`;
   font-size: 0.86rem;
   color: var(--ink);
 }
+
+.card-wide {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 901px) {
+  .card-wide {
+    flex-direction: row;
+  }
+
+  .card-wide :deep(.pv) {
+    width: 280px;
+    flex: none;
+    height: auto;
+    border-bottom: none;
+    border-right: 1px solid var(--rule);
+  }
+
+  .card-wide .card-body {
+    max-width: 64ch;
+  }
+
+  .card-wide .card-problem {
+    max-width: none;
+  }
+}
 </style>
