@@ -10,7 +10,7 @@ export const profile = {
 
 export const bio = {
   quote:
-    "I build the backbone of B2B SaaS products — multi-tenant Laravel and Vue.js systems that turn regulatory and operational complexity into software you can trust. Over the past three years I've shipped production systems across social commerce, public transit ticketing, and financial compliance in Tunisia. I'm most useful on the problems other developers avoid: exact calculation logic, tenant isolation, and the edge cases where a small mistake becomes an incident.",
+    "I build the backbone of B2B SaaS products — multi-tenant Laravel and Vue.js systems that turn regulatory and operational complexity into software you can trust. Over the past three years I've shipped production systems across social commerce and financial compliance in Tunisia. I'm most useful on the problems other developers avoid: exact calculation logic, tenant isolation, and the edge cases where a small mistake becomes an incident.",
   strengths: [
     {
       title: "Regulatory-grade engineering",
@@ -33,9 +33,9 @@ export const bio = {
         "Documents every service with Swagger/REST contracts; has shipped JWT auth, API gateways, and microservice-to-microservice messaging in production.",
     },
     {
-      title: "Four companies, three years, rising stakes",
+      title: "Three companies, three years, rising stakes",
       detail:
-        "Moved from a public transit ticketing platform to national financial-compliance systems, each step handed more complex domain logic.",
+        "Moved from social-commerce platforms to national financial-compliance systems, each step handed more complex domain logic.",
     },
   ],
 };
@@ -72,7 +72,7 @@ export const projects = [
     name: "NetAdvisor",
     tagline: "A microservices backend connecting personal shoppers and clients, live.",
     role: "NetAdvisor",
-    dates: "Sep 2024 – Jul 2025",
+    dates: "Sep 2024 – Nov 2025",
     problem:
       "A social-commerce platform needed real-time chat between personal shoppers and clients, secure service-to-service communication, and a public Angular site — under a compressed timeline.",
     stack: ["Laravel 12", "Node.js", "Socket.IO", "Angular 16", "JWT", "API Gateway"],
@@ -87,22 +87,6 @@ export const projects = [
       { label: "Kastelo", url: "https://www.kastelo.com.tn/" },
       { label: "Topomer · Google Play", url: "https://play.google.com/store/apps/details?id=com.topomer.application" },
     ],
-  },
-  {
-    slug: "stb-bus",
-    name: "STB Bus Subscriptions",
-    tagline: "Taking a national transit operator's ticketing online.",
-    role: "AMA Business Tunisie",
-    dates: "May 2024 – Sep 2024",
-    problem:
-      "STB, Tunisia's national bus operator, needed riders to buy subscriptions online with secure payment, plus staff tooling to manage the program — alongside a portfolio of legacy sites to keep alive.",
-    stack: ["Laravel 11", "MySQL", "ClickToPay", "CodeIgniter 3"],
-    highlights: [
-      "Built the public purchase flow and a full admin management dashboard from scratch",
-      "Integrated ClickToPay for secure online payment",
-      "Maintained and modernized legacy CodeIgniter 3 and WordPress platforms in parallel",
-    ],
-    visual: "ticket",
   },
 ];
 
@@ -159,16 +143,9 @@ export const experience = [
   {
     company: "NetAdvisor",
     role: "Full-Stack Developer (Angular | Laravel)",
-    dates: "Sep 2024 – Jul 2025",
+    dates: "Sep 2024 – Nov 2025",
     summary: "Social-commerce backend, microservices, real-time chat.",
     projectSlug: "netadvisor",
-  },
-  {
-    company: "AMA Business Tunisie",
-    role: "Full-Stack Developer (Laravel | CodeIgniter | PHP)",
-    dates: "May 2024 – Sep 2024",
-    summary: "Public transit ticketing platform for STB Tunisia.",
-    projectSlug: "stb-bus",
   },
   {
     company: "Next Consult",
